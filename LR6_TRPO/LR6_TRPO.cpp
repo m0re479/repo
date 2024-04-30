@@ -1,6 +1,12 @@
 ﻿#include <iostream>
 #include <cassert>
 
+struct Expression;
+struct Number;
+struct BinaryOperation;
+struct FunctionCall;
+struct Variable;
+
 struct Transformer { //реализация паттерна проектирования Visitor
 	virtual ~Transformer() {}
 	virtual Expression* transformNumber(Number const*) = 0;
@@ -111,6 +117,35 @@ private:
 	std::string const name_; // имя переменной
 };
 
+struct CopySyntaxTree : Transformer {
+	Expression* transformNumber(Number const* number) {
+		Expression* expression = new Number(number->value());
+		return expression;
+	}
+
+	Expression* transformBinaryOperation(BinaryOperation const* binop) {
+		Expression* expression = new BinaryOperation(
+			(binop->left())->transform(this),
+			binop->operation(), 
+			(binop->right())->transform(this)
+		);
+		return expression;
+	}
+
+	Expression* transformFunctionCall(FunctionCall const* fcall) {
+		Expression* expression = new FunctionCall(
+			fcall->name(),
+			(fcall->arg())->transform(this)
+		);
+		return expression;
+	}
+
+	Expression* transformVariable(Variable const* var) {
+		Expression* expression = new Variable(var->name());
+		return expression;
+	}
+};
+
 int main()
 {
 	/*std::cout << "Hello World!\n";
@@ -128,8 +163,22 @@ int main()
 	Expression* callAbs = new FunctionCall("abs", mult);
 	std::cout << callAbs->evaluate() << std::endl;*/
 	//------------------------------------------------------------------------------
-	Expression* expression = new Number(10.0);
+	/*Expression* expression = new Number(10.0);
 	Transformer* transformer = new AconcreteTransformer();
-	Expression* new_expression = expression->transform(transformer);
-
+	Expression* new_expression = expression->transform(transformer);*/
+	//------------------------------------------------------------------------------
+	Number* n32 = new Number(32.0);
+	Number* n16 = new Number(16.0);
+	BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
+	std::cout << "minus = " << minus->evaluate() << std::endl;
+	FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
+	std::cout << "callSqrt = " << callSqrt->evaluate() << std::endl;
+	Variable* var = new Variable("var");
+	BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL, callSqrt);
+	std::cout << "mult = " << mult->evaluate() << std::endl;
+	FunctionCall* callAbs = new FunctionCall("abs", mult);
+	std::cout << "callAbs = " << callAbs->evaluate() << std::endl;
+	CopySyntaxTree CST;
+	Expression* newExpr = callAbs->transform(&CST);
+	std::cout << "newExpr = " << newExpr->evaluate() << std::endl;
 }
