@@ -1,10 +1,19 @@
 ﻿#include <iostream>
 #include <cassert>
 
+struct Transformer { //реализация паттерна проектирования Visitor
+	virtual ~Transformer() {}
+	virtual Expression* transformNumber(Number const*) = 0;
+	virtual Expression* transformBinaryOperation(BinaryOperation const*) = 0;
+	virtual Expression* transformFunctionCall(FunctionCall const*) = 0;
+	virtual Expression* transformVariable(Variable const*) = 0;
+};
+
 struct Expression //базовая абстрактная структура "Выражение"
 {
 	virtual ~Expression() { } //виртуальный деструктор
 	virtual double evaluate() const = 0; //абстрактный метод «вычислить»
+	virtual Expression* transform(Transformer* tr) const = 0; // возвращает полностью новое АСД
 };
 
 struct Number : Expression // стуктура «Число»
@@ -13,6 +22,10 @@ struct Number : Expression // стуктура «Число»
 	double value() const { return value_; } // метод чтения значения числа
 	double evaluate() const { return value_; } // реализация виртуального метода «вычислить»
 	~Number() {}//деструктор, тоже виртуальный
+
+	Expression* transform(Transformer* tr) const {
+		return tr->transformNumber(this);
+	}
 
 private:
 	double value_; // само вещественное число
@@ -48,6 +61,10 @@ struct BinaryOperation : Expression // «Бинарная операция»
 		}
 	}
 
+	Expression* transform(Transformer* tr) const {
+		return tr->transformBinaryOperation(this);
+	}
+
 private:
 	Expression const* left_; // указатель на левый операнд
 	Expression const* right_; // указатель на правый операнд
@@ -70,6 +87,11 @@ struct FunctionCall : Expression // структура «Вызов функци
 		else return fabs(arg_->evaluate()); // либо модуль — остальные функции запрещены
 	}
 
+	Expression* transform(Transformer* tr) const {
+		return tr->transformFunctionCall(this);
+	}
+
+
 private:
 	std::string const name_; // имя функции 
 	Expression const* arg_; // указатель на ее аргумент
@@ -80,27 +102,34 @@ struct Variable : Expression // структура «Переменная»
 	Variable(std::string const& name) : name_(name) { } //в конструкторе надо указать ее имя
 	std::string const& name() const { return name_; } // чтение имени переменной
 	double evaluate() const { return 0.0; } // реализация виртуального метода «вычислить»
-	
+
+	Expression* transform(Transformer* tr) const {
+		return tr->transformVariable(this);
+	}
+
 private:
 	std::string const name_; // имя переменной
 };
 
 int main()
 {
-    std::cout << "Hello World!\n";
+	/*std::cout << "Hello World!\n";
 	Expression* e1 = new Number(1.234);
 	Expression* e2 = new Number(-1.234);
 	Expression* e3 = new BinaryOperation(e1, BinaryOperation::DIV, e2);
-	std::cout << e3->evaluate() << std::endl;
+	std::cout << e3->evaluate() << std::endl;*/
 	//------------------------------------------------------------------------------
-	Expression* n32 = new Number(32.0);
+	/*Expression* n32 = new Number(32.0);
 	Expression* n16 = new Number(16.0);
 	Expression* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
 	Expression* callSqrt = new FunctionCall("sqrt", minus);
 	Expression* n2 = new Number(2.0);
 	Expression* mult = new BinaryOperation(n2, BinaryOperation::MUL, callSqrt);
 	Expression* callAbs = new FunctionCall("abs", mult);
-	std::cout << callAbs->evaluate() << std::endl;
+	std::cout << callAbs->evaluate() << std::endl;*/
 	//------------------------------------------------------------------------------
-	
+	Expression* expression = new Number(10.0);
+	Transformer* transformer = new AconcreteTransformer();
+	Expression* new_expression = expression->transform(transformer);
+
 }
