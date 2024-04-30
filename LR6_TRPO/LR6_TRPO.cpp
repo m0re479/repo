@@ -20,6 +20,7 @@ struct Expression //базовая абстрактная структура "В
 	virtual ~Expression() { } //виртуальный деструктор
 	virtual double evaluate() const = 0; //абстрактный метод «вычислить»
 	virtual Expression* transform(Transformer* tr) const = 0; // возвращает полностью новое АСД
+	
 };
 
 struct Number : Expression // стуктура «Число»
@@ -119,32 +120,104 @@ private:
 
 struct CopySyntaxTree : Transformer {
 	Expression* transformNumber(Number const* number) {
-		Expression* expression = new Number(number->value());
-		return expression;
+		return new Number(number->value());
 	}
 
 	Expression* transformBinaryOperation(BinaryOperation const* binop) {
-		Expression* expression = new BinaryOperation(
+		return new BinaryOperation(
 			(binop->left())->transform(this),
 			binop->operation(), 
 			(binop->right())->transform(this)
 		);
-		return expression;
 	}
 
 	Expression* transformFunctionCall(FunctionCall const* fcall) {
-		Expression* expression = new FunctionCall(
+		return new FunctionCall(
 			fcall->name(),
 			(fcall->arg())->transform(this)
 		);
-		return expression;
 	}
 
 	Expression* transformVariable(Variable const* var) {
-		Expression* expression = new Variable(var->name());
-		return expression;
+		return new Variable(var->name());
 	}
 };
+
+struct FoldConstants : Transformer {
+	Expression* transformNumber(Number const* number) {//Просто число, преобразований не требуется
+		return new Number(number->value());
+	}
+	Expression* transformBinaryOperation(BinaryOperation const* binop) {
+		//Рассматриваем левое и правое выражения (с рекурсией)
+		Expression* L = (binop->left())->transform(this);
+		Expression* R = (binop->right())->transform(this);
+
+		//Проверка, являются ли левое и правое выражения числами
+		Number* L_numb = dynamic_cast<Number*>(L);
+		Number* R_numb = dynamic_cast<Number*>(R);
+
+		//Промежуточный узел дерева
+		int Op = binop->operation();
+		BinaryOperation* newBinop = new BinaryOperation(L, Op, R);
+
+		if (L_numb && R_numb) {//оба явялются числами => нужно вычислить (свернуть)
+			Expression* foldConst = new Number(newBinop->evaluate());
+			delete newBinop; //узел больше не нужен
+			return foldConst;
+		}
+		//Хотя бы одно из выражений не принадлежит типу Number
+		return newBinop;
+
+	}
+	Expression* transformFunctionCall(FunctionCall const* fcall) {
+		//Рассматриваем аргумент функции
+		Expression* Arg = (fcall->arg())->transform(this);
+
+		//Проверка, является ли аргумент числом
+		Number* Arg_numb = dynamic_cast<Number*>(Arg);
+
+		//Промежуточный узел дерева
+		std::string Name = fcall->name();
+		FunctionCall* newFcall = new FunctionCall(Name, Arg);
+
+		if (Arg_numb) { //аргумент имеет тип Number => нужно вычислить (свернуть)
+			Expression* foldConst = new Number(newFcall->evaluate());
+			delete newFcall; //узел больше не нужен
+			return foldConst;
+		}
+		return newFcall;
+	}
+	Expression* transformVariable(Variable const* var) { //Просто переменная, преобразований не требуется
+		return new Variable(var->name());
+	}
+};
+
+void printExpr(const Expression* expression) { //Вывод выражения на экран
+	const Number* numb = dynamic_cast<const Number*>(expression);
+	if (numb) {
+		std::cout << numb->value();
+	}
+	else {
+		const BinaryOperation* binop = dynamic_cast<const BinaryOperation*>(expression);
+		if (binop) {
+			printExpr(binop->left());
+			std::cout << static_cast<char>(binop->operation());
+			printExpr(binop->right());
+		}
+		else {
+			const FunctionCall* funCall = dynamic_cast<const FunctionCall*>(expression);
+			if (funCall) {
+				std::cout << funCall->name() + "(";
+				printExpr(funCall->arg());
+				std::cout << ")";
+			}
+			else {
+				const Variable* var = dynamic_cast<const Variable*>(expression);
+				std::cout << var->name();
+			}
+		}
+	}
+}
 
 int main()
 {
@@ -167,7 +240,8 @@ int main()
 	Transformer* transformer = new AconcreteTransformer();
 	Expression* new_expression = expression->transform(transformer);*/
 	//------------------------------------------------------------------------------
-	Number* n32 = new Number(32.0);
+	//Проверка работы CopySyntaxTree
+	/*Number* n32 = new Number(32.0);
 	Number* n16 = new Number(16.0);
 	BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
 	std::cout << "minus = " << minus->evaluate() << std::endl;
@@ -180,5 +254,19 @@ int main()
 	std::cout << "callAbs = " << callAbs->evaluate() << std::endl;
 	CopySyntaxTree CST;
 	Expression* newExpr = callAbs->transform(&CST);
-	std::cout << "newExpr = " << newExpr->evaluate() << std::endl;
+	std::cout << "newExpr = " << newExpr->evaluate() << std::endl;*/
+	//------------------------------------------------------------------------------
+	//Проверка работы FoldConstants
+	Number* n32 = new Number(32.0);
+	Number* n16 = new Number(16.0);
+	BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
+	FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
+	Variable* var = new Variable("var");
+	BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL, callSqrt);
+	FunctionCall* callAbs = new FunctionCall("abs", mult);
+	printExpr(callAbs);
+	std::cout << std::endl;
+	FoldConstants FC;
+	Expression* newExpr = callAbs->transform(&FC);
+	printExpr(newExpr);
 }
